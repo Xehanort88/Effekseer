@@ -367,3 +367,14 @@ Transform_ReverseTimeline_Desc,全ノードのカーブとイージングを逆�
 Transform_Flip_Label,エフェクトの反転:
 Transform_Approximated,"次のパラメーターは近似で反転しました。乱数を含む値は粒子ごとに対応付けられないため、平均的な動きは反転しますが、ばらつきは反転しません。
 {0}"
+InternalDisplace,エフェクトを移動...
+InternalRecolour,エフェクトを塗り替え...
+Transform_Displace_Desc,エフェクト全体を移動します。子ノードは親に従うため、形は変わりません。
+Transform_Displace_Skipped,"エフェクトを移動しました。ただし次のパラメーターはずらす位置を持たないため、変更していません。
+{0}"
+Transform_Recolour_Desc,描画設定のすべての色の色相を変えます。彩度と明度はそのままです。純白、純黒、灰色は色相を持たないため対象外です。
+Transform_Recolour_Rotate,回す
+Transform_Recolour_Set,指定
+Transform_Recolour_Hue,色相（度）
+Transform_Recolour_Skipped,"エフェクトを塗り替えました。ただし次のパラメーターは変更していません。
+{0}"

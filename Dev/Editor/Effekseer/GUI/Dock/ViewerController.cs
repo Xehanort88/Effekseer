@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -166,6 +166,30 @@ namespace Effekseer.GUI.Dock
 			if (Manager.NativeManager.IsItemHovered())
 			{
 				Manager.NativeManager.SetTooltip(MultiLanguageTextProvider.GetText("Transform_ReverseTimeline_Desc"));
+			}
+
+			Manager.NativeManager.SameLine(0.0f, spacing * 2.0f);
+
+			if (Manager.NativeManager.Button(MultiLanguageTextProvider.GetText("InternalDisplace")))
+			{
+				Commands.Displace();
+			}
+
+			if (Manager.NativeManager.IsItemHovered())
+			{
+				Manager.NativeManager.SetTooltip(MultiLanguageTextProvider.GetText("Transform_Displace_Desc"));
+			}
+
+			Manager.NativeManager.SameLine(0.0f, spacing);
+
+			if (Manager.NativeManager.Button(MultiLanguageTextProvider.GetText("InternalRecolour")))
+			{
+				Commands.Recolour();
+			}
+
+			if (Manager.NativeManager.IsItemHovered())
+			{
+				Manager.NativeManager.SetTooltip(MultiLanguageTextProvider.GetText("Transform_Recolour_Desc"));
 			}
 
 			void FlipButton(string label, Func<bool> command, float gap)

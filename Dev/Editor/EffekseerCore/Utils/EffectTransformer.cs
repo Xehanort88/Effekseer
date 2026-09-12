@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Effekseer.Data;
@@ -541,6 +541,147 @@ namespace Effekseer.Utils
 				case AxisType.YAxis: return TransformAxis.Y;
 				default: return TransformAxis.Z;
 			}
+		}
+
+		#endregion
+
+		#region displace
+
+		/// <summary>
+		/// エフェクト全体を平行移動する。
+		/// 子ノードの位置は親からの相対値なので、最上位のノードだけを動かせば
+		/// 形を保ったまま全体が移動する。
+		/// ただし親の移動を受け継がない設定のノードは、深さに関わらず個別に動かす。
+		/// </summary>
+		public static EffectTransformResult Displace(NodeRoot root, float x, float y, float z)
+		{
+			var result = new EffectTransformResult();
+			if (root == null) return result;
+
+			Command.CommandManager.StartCollection();
+			try
+			{
+				foreach (var node in EnumerateNodes(root))
+				{
+					if (!MovesWithParent(node))
+					{
+						DisplaceNode(node, x, y, z, result);
+					}
+
+					result.NodeCount++;
+				}
+			}
+			finally
+			{
+				Command.CommandManager.EndCollection();
+			}
+
+			return result;
+		}
+
+		/// <summary>
+		/// 親の移動に追従するか。最上位のノードは追従する親を持たない。
+		/// </summary>
+		static bool MovesWithParent(Node node)
+		{
+			if (node.Parent is NodeRoot) return false;
+
+			switch (node.CommonValues.LocationEffectType.Value)
+			{
+				case TranslationParentEffectType.NotBind:
+				case TranslationParentEffectType.NotBind_Root:
+					return false;
+
+				default:
+					return true;
+			}
+		}
+
+		static void DisplaceNode(Node node, float x, float y, float z, EffectTransformResult result)
+		{
+			var location = node.LocationValues;
+
+			switch (location.Type.Value)
+			{
+				case LocationValues.ParamaterType.Fixed:
+					Shift(location.Fixed.Location, x, y, z);
+					break;
+
+				case LocationValues.ParamaterType.PVA:
+					// 速度と加速度は動かさない。動き方は変えずに出発点だけを移す。
+					Shift(location.PVA.Location, x, y, z);
+					break;
+
+				case LocationValues.ParamaterType.Easing:
+					Shift(location.Easing.Start, x, y, z);
+					Shift(location.Easing.End, x, y, z);
+					break;
+
+				case LocationValues.ParamaterType.LocationFCurve:
+				{
+					var curve = location.LocationFCurve.FCurve;
+					ShiftCurveValues(curve.X, x);
+					ShiftCurveValues(curve.Y, y);
+					ShiftCurveValues(curve.Z, z);
+					break;
+				}
+
+				case LocationValues.ParamaterType.NurbsCurve:
+					// 経路は外部ファイルにあり、ずらす余地がない。
+					result.Skip("Position", "Position_ParameterType_NurbsCurve_Name");
+					break;
+
+				case LocationValues.ParamaterType.ViewOffset:
+					result.Skip("Position", "Position_ParameterType_ViewOffset_Name");
+					break;
+			}
+		}
+
+		static void Shift(Vector3D value, float x, float y, float z)
+		{
+			TrySetValue(value.X, value.X.GetValue() + x);
+			TrySetValue(value.Y, value.Y.GetValue() + y);
+			TrySetValue(value.Z, value.Z.GetValue() + z);
+		}
+
+		static void Shift(Vector3DWithRandom value, float x, float y, float z)
+		{
+			// 中心を動かすと振れ幅は保たれる。
+			TrySetCenter(value.X, value.X.GetCenter() + x);
+			TrySetCenter(value.Y, value.Y.GetCenter() + y);
+			TrySetCenter(value.Z, value.Z.GetCenter() + z);
+		}
+
+		static bool TrySetValue(Float value, float target)
+		{
+			if (target < value.RangeMin || target > value.RangeMax) return false;
+
+			value.SetValue(target);
+			return true;
+		}
+
+		/// <summary>
+		/// F カーブ全体を縦にずらす。制御点は絶対座標なので一緒に動かす。
+		/// </summary>
+		static void ShiftCurveValues(FCurve<float> curve, float delta)
+		{
+			if (delta == 0.0f) return;
+
+			var keys = ReadKeys(curve);
+			if (keys.Length == 0) return;
+
+			var replaced = keys
+				.Select(source =>
+				{
+					var key = new FCurveKey<float>(source.Frame, source.ValueAsFloat + delta);
+					key.SetLeftDirectly(source.LeftX, source.LeftY + delta);
+					key.SetRightDirectly(source.RightX, source.RightY + delta);
+					key.SetInterpolationType(source.InterpolationType);
+					return key;
+				})
+				.ToArray();
+
+			curve.SetKeys(replaced);
 		}
 
 		#endregion

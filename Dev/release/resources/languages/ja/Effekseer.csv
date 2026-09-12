@@ -380,3 +380,7 @@ Transform_Recolour_Skipped,"エフェクトを塗り替えました。ただし�
 {0}"
 Transform_Recolour_Saturation,彩度（倍率）
 Transform_Recolour_Brightness,明度（倍率）
+Transform_Recolour_Target,目標の色
+Transform_Recolour_HueReadout,色から取った色相: {0} 度
+Transform_Recolour_Before,変換前
+Transform_Recolour_After,変換後

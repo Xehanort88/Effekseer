@@ -363,3 +363,20 @@ Transform_ReverseTimeline_Desc,Проигрывает кривые и плавн
 Transform_Flip_Label,Отразить эффект:
 Transform_Approximated,"Эти параметры обращены приблизительно. Случайные значения нельзя сопоставить частица к частице, поэтому среднее движение обращается, а разброс — нет:
 {0}"
+InternalDisplace,Сместить эффект...
+InternalRecolour,Перекрасить эффект...
+Transform_Displace_Desc,"Перемещает весь эффект. Дочерние узлы следуют за родительскими, поэтому форма сохраняется."
+Transform_Displace_Skipped,"Эффект перемещён, но у этих параметров нет позиции для смещения, и они остались без изменений:
+{0}"
+Transform_Recolour_Desc,"Меняет оттенок всех цветов в настройках рендеринга. Насыщенность и яркость сохраняются. Чистый белый, чистый чёрный и серые не имеют оттенка и не изменяются."
+Transform_Recolour_Rotate,Повернуть
+Transform_Recolour_Set,Задать
+Transform_Recolour_Hue,Оттенок (градусы)
+Transform_Recolour_Skipped,"Эффект перекрашен, но эти параметры остались без изменений:
+{0}"
+Transform_Recolour_Saturation,Насыщенность (x)
+Transform_Recolour_Brightness,Яркость (x)
+Transform_Recolour_Target,Целевой цвет
+Transform_Recolour_HueReadout,"Оттенок, взятый из цвета: {0} градусов"
+Transform_Recolour_Before,До
+Transform_Recolour_After,После

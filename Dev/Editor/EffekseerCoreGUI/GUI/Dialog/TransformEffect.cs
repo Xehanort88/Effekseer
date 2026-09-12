@@ -142,7 +142,7 @@ namespace Effekseer.GUI.Dialog
 	/// </summary>
 	class RecolourEffect : PreviewDialog
 	{
-		Utils.HueMode mode = Utils.HueMode.Rotate;
+		Utils.HueMode mode = Utils.HueMode.Set;
 		readonly float[] hue = new float[] { 0.0f };
 		readonly float[] saturation = new float[] { 1.0f };
 		readonly float[] brightness = new float[] { 1.0f };
@@ -150,6 +150,15 @@ namespace Effekseer.GUI.Dialog
 		protected override string TitleKey { get { return "InternalRecolour"; } }
 		protected override string Id { get { return "RecolourEffectDialog"; } }
 		protected override string SkippedMessageKey { get { return "Transform_Recolour_Skipped"; } }
+
+		/// <summary>
+		/// 選んだ色。色相だけを使い、彩度と明度は倍率の側で決める。
+		/// </summary>
+		readonly float[] target = new float[] { 1.0f, 0.0f, 0.0f, 1.0f };
+
+		bool hasSample = false;
+		readonly float[] sample = new float[] { 1.0f, 1.0f, 1.0f, 1.0f };
+		readonly float[] outcome = new float[] { 1.0f, 1.0f, 1.0f, 1.0f };
 
 		protected override bool DrawContents()
 		{
@@ -159,25 +168,46 @@ namespace Effekseer.GUI.Dialog
 			bool changed = false;
 
 			if (Manager.NativeManager.RadioButton(
-				MultiLanguageTextProvider.GetText("Transform_Recolour_Rotate"), mode == Utils.HueMode.Rotate))
-			{
-				changed |= SetMode(Utils.HueMode.Rotate);
-			}
-
-			Manager.NativeManager.SameLine();
-
-			if (Manager.NativeManager.RadioButton(
 				MultiLanguageTextProvider.GetText("Transform_Recolour_Set"), mode == Utils.HueMode.Set))
 			{
 				changed |= SetMode(Utils.HueMode.Set);
 			}
 
-			// 回転は前後どちらにも回せるが、指定は色相環の位置そのものになる。
-			float minimum = mode == Utils.HueMode.Rotate ? -180.0f : 0.0f;
-			float maximum = mode == Utils.HueMode.Rotate ? 180.0f : 360.0f;
+			Manager.NativeManager.SameLine();
 
-			changed |= Manager.NativeManager.DragFloat(
-				MultiLanguageTextProvider.GetText("Transform_Recolour_Hue"), hue, 1.0f, minimum, maximum, "%.0f");
+			if (Manager.NativeManager.RadioButton(
+				MultiLanguageTextProvider.GetText("Transform_Recolour_Rotate"), mode == Utils.HueMode.Rotate))
+			{
+				changed |= SetMode(Utils.HueMode.Rotate);
+			}
+
+			if (mode == Utils.HueMode.Set)
+			{
+				// 色を選ばせる。選択見本を押すと色相環と 16 進入力が開く。
+				var flags = swig.ColorEditFlags.NoAlpha
+					| swig.ColorEditFlags.DisplayHex
+					| swig.ColorEditFlags.PickerHueWheel;
+
+				if (Manager.NativeManager.ColorEdit4(
+					MultiLanguageTextProvider.GetText("Transform_Recolour_Target"), target, flags))
+				{
+					float picked;
+					if (Utils.EffectRecolour.TryGetHue(target[0], target[1], target[2], out picked))
+					{
+						hue[0] = picked;
+						changed = true;
+					}
+				}
+
+				Manager.NativeManager.Text(string.Format(
+					MultiLanguageTextProvider.GetText("Transform_Recolour_HueReadout"), (int)hue[0]));
+			}
+			else
+			{
+				// 相対的な回し幅なので、色を選ばせても意味が通らない。
+				changed |= Manager.NativeManager.DragFloat(
+					MultiLanguageTextProvider.GetText("Transform_Recolour_Hue"), hue, 1.0f, -180.0f, 180.0f, "%.0f");
+			}
 
 			changed |= Manager.NativeManager.DragFloat(
 				MultiLanguageTextProvider.GetText("Transform_Recolour_Saturation"), saturation, 0.01f, 0.0f, 4.0f, "%.2f");
@@ -185,17 +215,65 @@ namespace Effekseer.GUI.Dialog
 			changed |= Manager.NativeManager.DragFloat(
 				MultiLanguageTextProvider.GetText("Transform_Recolour_Brightness"), brightness, 0.01f, 0.0f, 4.0f, "%.2f");
 
+			DrawSwatches();
+
 			return changed;
 		}
 
-		protected override Utils.EffectTransformResult Run()
+		/// <summary>
+		/// エフェクトから拾った色を、変換前と変換後で並べて見せる。
+		/// 数字だけでは結果が想像できないため。
+		/// </summary>
+		void DrawSwatches()
+		{
+			if (!hasSample)
+			{
+				float r, g, b;
+				if (!Utils.EffectRecolour.TrySampleColour(Core.Root, out r, out g, out b)) return;
+
+				sample[0] = r / 255.0f;
+				sample[1] = g / 255.0f;
+				sample[2] = b / 255.0f;
+				hasSample = true;
+			}
+
+			float outR, outG, outB;
+			Utils.EffectRecolour.Preview(sample[0] * 255.0f, sample[1] * 255.0f, sample[2] * 255.0f,
+				CurrentSettings(), out outR, out outG, out outB);
+
+			outcome[0] = outR / 255.0f;
+			outcome[1] = outG / 255.0f;
+			outcome[2] = outB / 255.0f;
+
+			Manager.NativeManager.Separator();
+
+			var flags = swig.ColorEditFlags.NoAlpha
+				| swig.ColorEditFlags.NoInputs
+				| swig.ColorEditFlags.NoPicker
+				| swig.ColorEditFlags.NoDragDrop;
+
+			Manager.NativeManager.ColorEdit4(
+				MultiLanguageTextProvider.GetText("Transform_Recolour_Before"), sample, flags);
+
+			Manager.NativeManager.SameLine();
+
+			Manager.NativeManager.ColorEdit4(
+				MultiLanguageTextProvider.GetText("Transform_Recolour_After"), outcome, flags);
+		}
+
+		Utils.RecolourSettings CurrentSettings()
 		{
 			var settings = Utils.RecolourSettings.Default;
 			settings.Mode = mode;
 			settings.Hue = hue[0];
 			settings.Saturation = saturation[0];
 			settings.Brightness = brightness[0];
+			return settings;
+		}
 
+		protected override Utils.EffectTransformResult Run()
+		{
+			var settings = CurrentSettings();
 			if (settings.IsIdentity) return null;
 
 			return Utils.EffectRecolour.Apply(Core.Root, settings);
@@ -207,10 +285,15 @@ namespace Effekseer.GUI.Dialog
 
 			mode = next;
 
-			// 片方の範囲に収まらない値が残ると、意図しない色になる。
-			hue[0] = next == Utils.HueMode.Rotate
-				? Math.Max(-180.0f, Math.Min(180.0f, hue[0]))
-				: Math.Max(0.0f, Math.Min(360.0f, hue[0]));
+			// 指定は色相環の位置、回転は前後の振れ幅。範囲が違うので移すときに畳む。
+			if (next == Utils.HueMode.Rotate)
+			{
+				hue[0] = Math.Max(-180.0f, Math.Min(180.0f, hue[0]));
+			}
+			else
+			{
+				hue[0] = (hue[0] % 360.0f + 360.0f) % 360.0f;
+			}
 
 			return true;
 		}
@@ -239,14 +322,17 @@ namespace Effekseer.GUI.Dialog
 
 			var result = ModalResult.None;
 
-			if (Manager.NativeManager.Button("OK" + id, buttonWidth))
+			// 「###」以降が識別子になる。両方に同じものを付けると衝突するので、
+			// ボタンごとに違う末尾を足す。
+			if (Manager.NativeManager.Button("OK" + id + "Ok", buttonWidth))
 			{
 				result = ModalResult.Accepted;
 			}
 
 			Manager.NativeManager.SameLine();
 
-			if (Manager.NativeManager.Button(MultiLanguageTextProvider.GetText("Cancel") + id, buttonWidth))
+			if (Manager.NativeManager.Button(
+				MultiLanguageTextProvider.GetText("Cancel") + id + "Cancel", buttonWidth))
 			{
 				result = ModalResult.Cancelled;
 			}

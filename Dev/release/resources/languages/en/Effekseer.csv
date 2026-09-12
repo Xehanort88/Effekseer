@@ -380,3 +380,7 @@ Transform_Recolour_Skipped,"The effect was recoloured, but these parameters were
 {0}"
 Transform_Recolour_Saturation,Saturation (x)
 Transform_Recolour_Brightness,Brightness (x)
+Transform_Recolour_Target,Target colour
+Transform_Recolour_HueReadout,Hue taken from the colour: {0} degrees
+Transform_Recolour_Before,Before
+Transform_Recolour_After,After

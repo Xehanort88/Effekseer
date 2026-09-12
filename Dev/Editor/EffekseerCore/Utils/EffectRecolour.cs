@@ -85,7 +85,7 @@ namespace Effekseer.Utils
 			{
 				foreach (var node in EnumerateNodes(root))
 				{
-					Walk(node.DrawingValues, settings, new HashSet<object>(ReferenceComparer.Instance), 0);
+					Walk(node.DrawingValues, colour => Recolour(colour, settings));
 					result.NodeCount++;
 				}
 			}
@@ -95,6 +95,132 @@ namespace Effekseer.Utils
 			}
 
 			return result;
+		}
+
+		/// <summary>
+		/// エフェクトの中から色味のある色をひとつ拾う。
+		/// ダイアログで変換前と変換後を並べて見せるための見本に使う。
+		/// </summary>
+		public static bool TrySampleColour(NodeRoot root, out float red, out float green, out float blue)
+		{
+			red = green = blue = 0.0f;
+			if (root == null) return false;
+
+			float sampleR = 0.0f, sampleG = 0.0f, sampleB = 0.0f;
+			bool found = false;
+
+			foreach (var node in EnumerateNodes(root))
+			{
+				Walk(node.DrawingValues, colour =>
+				{
+					if (found) return;
+
+					double r, g, b;
+					if (!TryReadColour(colour, out r, out g, out b)) return;
+
+					// 灰色は見本にならない。色相の変化が見えないため。
+					if (Math.Max(r, Math.Max(g, b)) == Math.Min(r, Math.Min(g, b))) return;
+
+					sampleR = (float)r;
+					sampleG = (float)g;
+					sampleB = (float)b;
+					found = true;
+				});
+
+				if (found) break;
+			}
+
+			red = sampleR;
+			green = sampleG;
+			blue = sampleB;
+			return found;
+		}
+
+		/// <summary>
+		/// ひとつの色に指定を適用した結果を返す。実際の書き換えはしない。
+		/// </summary>
+		public static void Preview(float red, float green, float blue, RecolourSettings settings,
+			out float outRed, out float outGreen, out float outBlue)
+		{
+			double r, g, b;
+			if (!TryRecolour(red, green, blue, settings, out r, out g, out b))
+			{
+				r = red;
+				g = green;
+				b = blue;
+			}
+
+			outRed = (float)r;
+			outGreen = (float)g;
+			outBlue = (float)b;
+		}
+
+		/// <summary>
+		/// 色相を度で返す。灰色は色相を持たないので false を返す。
+		/// </summary>
+		public static bool TryGetHue(float red, float green, float blue, out float degrees)
+		{
+			degrees = 0.0f;
+
+			double max = Math.Max(red, Math.Max(green, blue));
+			double min = Math.Min(red, Math.Min(green, blue));
+			double chroma = max - min;
+
+			if (max <= 0.0 || chroma <= 0.0) return false;
+
+			double hue;
+			if (max == red) hue = 60.0 * (green - blue) / chroma;
+			else if (max == green) hue = 60.0 * (blue - red) / chroma + 120.0;
+			else hue = 60.0 * (red - green) / chroma + 240.0;
+
+			degrees = (float)Wrap(hue, 360.0);
+			return true;
+		}
+
+		/// <summary>
+		/// 見本として読むだけ。乱数は上限を、グラデーションは最初の目印を代表とする。
+		/// HSVA の色は成分の意味が違うので見本にしない。
+		/// </summary>
+		static bool TryReadColour(object target, out double r, out double g, out double b)
+		{
+			r = g = b = 0.0;
+
+			var fixedColour = target as Data.Value.Color;
+			if (fixedColour != null)
+			{
+				if (fixedColour.ColorSpace == ColorSpace.HSVA) return false;
+
+				r = fixedColour.R.Value;
+				g = fixedColour.G.Value;
+				b = fixedColour.B.Value;
+				return true;
+			}
+
+			var random = target as ColorWithRandom;
+			if (random != null)
+			{
+				if (random.ColorSpace == ColorSpace.HSVA) return false;
+
+				r = random.R.GetMax();
+				g = random.G.GetMax();
+				b = random.B.GetMax();
+				return true;
+			}
+
+			var gradient = target as Gradient;
+			if (gradient != null)
+			{
+				var state = gradient.GetValue();
+				if (state == null || state.ColorMarkers == null || state.ColorMarkers.Length == 0) return false;
+
+				var marker = state.ColorMarkers[0];
+				r = marker.ColorR;
+				g = marker.ColorG;
+				b = marker.ColorB;
+				return true;
+			}
+
+			return false;
 		}
 
 		static IEnumerable<Node> EnumerateNodes(NodeBase parent)
@@ -116,40 +242,36 @@ namespace Effekseer.Utils
 		/// <summary>
 		/// 描画設定の中を下りながら、色の型に行き当たったら塗り替える。
 		/// </summary>
-		static void Walk(object target, RecolourSettings settings, HashSet<object> visited, int depth)
+		static void Walk(object root, Action<object> onColour)
+		{
+			Walk(root, onColour, new HashSet<object>(ReferenceComparer.Instance), 0);
+		}
+
+		static void Walk(object target, Action<object> onColour, HashSet<object> visited, int depth)
 		{
 			if (target == null) return;
 			if (depth > 8) return;
 			if (!visited.Add(target)) return;
 
-			if (target is Data.Value.Color)
+			if (target is Data.Value.Color || target is ColorWithRandom
+				|| target is Gradient || target is FCurveColorRGBA)
 			{
-				Recolour((Data.Value.Color)target, settings);
-				return;
-			}
-
-			if (target is ColorWithRandom)
-			{
-				Recolour((ColorWithRandom)target, settings);
-				return;
-			}
-
-			if (target is Gradient)
-			{
-				Recolour((Gradient)target, settings);
-				return;
-			}
-
-			if (target is FCurveColorRGBA)
-			{
-				Recolour((FCurveColorRGBA)target, settings);
+				onColour(target);
 				return;
 			}
 
 			foreach (var child in ChildrenOf(target))
 			{
-				Walk(child, settings, visited, depth + 1);
+				Walk(child, onColour, visited, depth + 1);
 			}
+		}
+
+		static void Recolour(object target, RecolourSettings settings)
+		{
+			if (target is Data.Value.Color) Recolour((Data.Value.Color)target, settings);
+			else if (target is ColorWithRandom) Recolour((ColorWithRandom)target, settings);
+			else if (target is Gradient) Recolour((Gradient)target, settings);
+			else if (target is FCurveColorRGBA) Recolour((FCurveColorRGBA)target, settings);
 		}
 
 		/// <summary>

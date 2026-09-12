@@ -378,3 +378,5 @@ Transform_Recolour_Set,Set
 Transform_Recolour_Hue,Hue (degrees)
 Transform_Recolour_Skipped,"The effect was recoloured, but these parameters were left unchanged:
 {0}"
+Transform_Recolour_Saturation,Saturation (x)
+Transform_Recolour_Brightness,Brightness (x)

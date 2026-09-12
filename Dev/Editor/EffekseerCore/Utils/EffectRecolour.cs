@@ -24,6 +24,44 @@ namespace Effekseer.Utils
 	}
 
 	/// <summary>
+	/// 塗り替えの指定。彩度と明度は倍率で、1 のとき変化しない。
+	/// </summary>
+	public struct RecolourSettings
+	{
+		public HueMode Mode;
+		public float Hue;
+		public float Saturation;
+		public float Brightness;
+
+		public static RecolourSettings Default
+		{
+			get
+			{
+				var settings = new RecolourSettings();
+				settings.Mode = HueMode.Rotate;
+				settings.Hue = 0.0f;
+				settings.Saturation = 1.0f;
+				settings.Brightness = 1.0f;
+				return settings;
+			}
+		}
+
+		/// <summary>
+		/// 何も変わらない指定か。無駄な Undo を積まないために使う。
+		/// </summary>
+		public bool IsIdentity
+		{
+			get
+			{
+				return Mode == HueMode.Rotate
+					&& Hue == 0.0f
+					&& Saturation == 1.0f
+					&& Brightness == 1.0f;
+			}
+		}
+	}
+
+	/// <summary>
 	/// 描画設定の色を、彩度と明度を変えずに塗り替える。
 	///
 	/// 対象となる色の型は Color, ColorWithRandom, Gradient, FCurveColorRGBA の 4 つだけで、
@@ -37,7 +75,7 @@ namespace Effekseer.Utils
 		/// </summary>
 		const int HueScale = 252;
 
-		public static EffectTransformResult Apply(NodeRoot root, HueMode mode, float hueDegrees)
+		public static EffectTransformResult Apply(NodeRoot root, RecolourSettings settings)
 		{
 			var result = new EffectTransformResult();
 			if (root == null) return result;
@@ -47,7 +85,7 @@ namespace Effekseer.Utils
 			{
 				foreach (var node in EnumerateNodes(root))
 				{
-					Walk(node.DrawingValues, mode, hueDegrees, new HashSet<object>(ReferenceComparer.Instance), 0);
+					Walk(node.DrawingValues, settings, new HashSet<object>(ReferenceComparer.Instance), 0);
 					result.NodeCount++;
 				}
 			}
@@ -78,7 +116,7 @@ namespace Effekseer.Utils
 		/// <summary>
 		/// 描画設定の中を下りながら、色の型に行き当たったら塗り替える。
 		/// </summary>
-		static void Walk(object target, HueMode mode, float hueDegrees, HashSet<object> visited, int depth)
+		static void Walk(object target, RecolourSettings settings, HashSet<object> visited, int depth)
 		{
 			if (target == null) return;
 			if (depth > 8) return;
@@ -86,31 +124,31 @@ namespace Effekseer.Utils
 
 			if (target is Data.Value.Color)
 			{
-				Recolour((Data.Value.Color)target, mode, hueDegrees);
+				Recolour((Data.Value.Color)target, settings);
 				return;
 			}
 
 			if (target is ColorWithRandom)
 			{
-				Recolour((ColorWithRandom)target, mode, hueDegrees);
+				Recolour((ColorWithRandom)target, settings);
 				return;
 			}
 
 			if (target is Gradient)
 			{
-				Recolour((Gradient)target, mode, hueDegrees);
+				Recolour((Gradient)target, settings);
 				return;
 			}
 
 			if (target is FCurveColorRGBA)
 			{
-				Recolour((FCurveColorRGBA)target, mode, hueDegrees);
+				Recolour((FCurveColorRGBA)target, settings);
 				return;
 			}
 
 			foreach (var child in ChildrenOf(target))
 			{
-				Walk(child, mode, hueDegrees, visited, depth + 1);
+				Walk(child, settings, visited, depth + 1);
 			}
 		}
 
@@ -166,7 +204,7 @@ namespace Effekseer.Utils
 		/// 灰色は色相を持たないので、純白も純黒も中間の灰色も対象外になる。
 		/// 変換したときは true を返す。
 		/// </summary>
-		static bool TryRecolour(double r, double g, double b, HueMode mode, float hueDegrees,
+		static bool TryRecolour(double r, double g, double b, RecolourSettings settings,
 			out double outR, out double outG, out double outB)
 		{
 			outR = r;
@@ -175,24 +213,37 @@ namespace Effekseer.Utils
 
 			double max = Math.Max(r, Math.Max(g, b));
 			double min = Math.Min(r, Math.Min(g, b));
-
-			// 彩度ゼロ。白、黒、灰色はここで弾かれる。
-			if (max <= 0.0 || max == min) return false;
-
 			double chroma = max - min;
 
-			double hue;
-			if (max == r) hue = 60.0 * (g - b) / chroma;
-			else if (max == g) hue = 60.0 * (b - r) / chroma + 120.0;
-			else hue = 60.0 * (r - g) / chroma + 240.0;
+			// 彩度ゼロ。白も黒も灰色もここに入る。色相を持たないので回しようがなく、
+			// 彩度を掛けても 0 のままだが、明度だけは掛かる。
+			bool hasHue = max > 0.0 && chroma > 0.0;
 
-			hue = Wrap(mode == HueMode.Set ? hueDegrees : hue + hueDegrees, 360.0);
+			double hue = 0.0;
+			if (hasHue)
+			{
+				if (max == r) hue = 60.0 * (g - b) / chroma;
+				else if (max == g) hue = 60.0 * (b - r) / chroma + 120.0;
+				else hue = 60.0 * (r - g) / chroma + 240.0;
 
-			double saturation = chroma / max;
+				hue = Wrap(settings.Mode == HueMode.Set ? settings.Hue : hue + settings.Hue, 360.0);
+			}
+
+			double saturation = hasHue ? chroma / max : 0.0;
 			double value = max;
 
+			saturation = Clamp(saturation * settings.Saturation, 0.0, 1.0);
+			value = Clamp(value * settings.Brightness, 0.0, 255.0);
+
 			HsvToRgb(hue, saturation, value, out outR, out outG, out outB);
-			return true;
+
+			// 灰色に明度も彩度も掛からないなら、何も書き換えない。
+			return hasHue || settings.Brightness != 1.0f;
+		}
+
+		static double Clamp(double value, double low, double high)
+		{
+			return value < low ? low : (value > high ? high : value);
 		}
 
 		static void HsvToRgb(double hue, double saturation, double value,
@@ -233,19 +284,31 @@ namespace Effekseer.Utils
 
 		#region colour values
 
-		static void Recolour(Data.Value.Color color, HueMode mode, float hueDegrees)
+		static void Recolour(Data.Value.Color color, RecolourSettings settings)
 		{
 			if (color.ColorSpace == ColorSpace.HSVA)
 			{
-				// この色空間では R が色相、G が彩度を保持している。
-				if (color.G.Value == 0) return;
+				// この色空間では R が色相、G が彩度、B が明度を保持している。
+				if (color.G.Value > 0)
+				{
+					color.R.SetValue(ShiftHsvaHue(color.R.Value, settings));
+				}
 
-				color.R.SetValue(ShiftHsvaHue(color.R.Value, mode, hueDegrees));
+				if (settings.Saturation != 1.0f)
+				{
+					color.G.SetValue((int)Clamp(Round(color.G.Value * settings.Saturation), 0, 255));
+				}
+
+				if (settings.Brightness != 1.0f)
+				{
+					color.B.SetValue((int)Clamp(Round(color.B.Value * settings.Brightness), 0, 255));
+				}
+
 				return;
 			}
 
 			double r, g, b;
-			if (!TryRecolour(color.R.Value, color.G.Value, color.B.Value, mode, hueDegrees, out r, out g, out b))
+			if (!TryRecolour(color.R.Value, color.G.Value, color.B.Value, settings, out r, out g, out b))
 			{
 				return;
 			}
@@ -253,28 +316,28 @@ namespace Effekseer.Utils
 			color.SetValue(Round(r), Round(g), Round(b), color.A.Value);
 		}
 
-		static void Recolour(ColorWithRandom color, HueMode mode, float hueDegrees)
+		static void Recolour(ColorWithRandom color, RecolourSettings settings)
 		{
 			if (color.ColorSpace == ColorSpace.HSVA)
 			{
-				RecolourHsvaChannel(color.R, color.G, mode, hueDegrees);
+				RecolourHsvaChannel(color.R, color.G, color.B, settings);
 				return;
 			}
 
 			// 乱数の下限と上限はそれぞれひとつの色なので、別々に塗り替える。
-			RecolourTriple(color.R, color.G, color.B, mode, hueDegrees, true);
-			RecolourTriple(color.R, color.G, color.B, mode, hueDegrees, false);
+			RecolourTriple(color.R, color.G, color.B, settings, true);
+			RecolourTriple(color.R, color.G, color.B, settings, false);
 		}
 
 		static void RecolourTriple(IntWithRandom r, IntWithRandom g, IntWithRandom b,
-			HueMode mode, float hueDegrees, bool useMin)
+			RecolourSettings settings, bool useMin)
 		{
 			int oldR = useMin ? r.GetMin() : r.GetMax();
 			int oldG = useMin ? g.GetMin() : g.GetMax();
 			int oldB = useMin ? b.GetMin() : b.GetMax();
 
 			double newR, newG, newB;
-			if (!TryRecolour(oldR, oldG, oldB, mode, hueDegrees, out newR, out newG, out newB)) return;
+			if (!TryRecolour(oldR, oldG, oldB, settings, out newR, out newG, out newB)) return;
 
 			if (useMin)
 			{
@@ -290,22 +353,36 @@ namespace Effekseer.Utils
 			}
 		}
 
+		/// <summary>
+		/// HSVA 色空間では色相、彩度、明度がそのまま別々の値なので、掛けるだけでよい。
+		/// </summary>
 		static void RecolourHsvaChannel(IntWithRandom hue, IntWithRandom saturation,
-			HueMode mode, float hueDegrees)
+			IntWithRandom value, RecolourSettings settings)
 		{
-			if (saturation.GetMax() > 0) hue.SetMax(ShiftHsvaHue(hue.GetMax(), mode, hueDegrees));
-			if (saturation.GetMin() > 0) hue.SetMin(ShiftHsvaHue(hue.GetMin(), mode, hueDegrees));
+			if (saturation.GetMax() > 0) hue.SetMax(ShiftHsvaHue(hue.GetMax(), settings));
+			if (saturation.GetMin() > 0) hue.SetMin(ShiftHsvaHue(hue.GetMin(), settings));
+
+			Scale(saturation, settings.Saturation, 255);
+			Scale(value, settings.Brightness, 255);
 		}
 
-		static int ShiftHsvaHue(int hue, HueMode mode, float hueDegrees)
+		static void Scale(IntWithRandom channel, float multiplier, int ceiling)
 		{
-			double scaled = hueDegrees / 360.0 * HueScale;
-			double shifted = mode == HueMode.Set ? scaled : hue + scaled;
+			if (multiplier == 1.0f) return;
+
+			channel.SetMin((int)Clamp(Round(channel.GetMin() * multiplier), 0, ceiling));
+			channel.SetMax((int)Clamp(Round(channel.GetMax() * multiplier), 0, ceiling));
+		}
+
+		static int ShiftHsvaHue(int hue, RecolourSettings settings)
+		{
+			double scaled = settings.Hue / 360.0 * HueScale;
+			double shifted = settings.Mode == HueMode.Set ? scaled : hue + scaled;
 
 			return Round(Wrap(shifted, HueScale));
 		}
 
-		static void Recolour(Gradient gradient, HueMode mode, float hueDegrees)
+		static void Recolour(Gradient gradient, RecolourSettings settings)
 		{
 			var state = gradient.GetValue();
 			if (state == null || state.ColorMarkers == null) return;
@@ -318,7 +395,7 @@ namespace Effekseer.Utils
 				var marker = state.ColorMarkers[i];
 
 				double r, g, b;
-				if (TryRecolour(marker.ColorR, marker.ColorG, marker.ColorB, mode, hueDegrees, out r, out g, out b))
+				if (TryRecolour(marker.ColorR, marker.ColorG, marker.ColorB, settings, out r, out g, out b))
 				{
 					marker.ColorR = (float)r;
 					marker.ColorG = (float)g;
@@ -341,7 +418,7 @@ namespace Effekseer.Utils
 		/// フレームで読む必要がある。どれかがキーを持つフレームをすべて集め、
 		/// そこで色を作り直す。キーの間は再補間されるため、曲線の形は少し変わる。
 		/// </summary>
-		static void Recolour(FCurveColorRGBA curve, HueMode mode, float hueDegrees)
+		static void Recolour(FCurveColorRGBA curve, RecolourSettings settings)
 		{
 			var frames = curve.R.Keys.Concat(curve.G.Keys).Concat(curve.B.Keys)
 				.Select(key => key.Frame)
@@ -364,7 +441,7 @@ namespace Effekseer.Utils
 				double oldB = curve.B.GetValue(frame);
 
 				double r, g, b;
-				if (!TryRecolour(oldR, oldG, oldB, mode, hueDegrees, out r, out g, out b))
+				if (!TryRecolour(oldR, oldG, oldB, settings, out r, out g, out b))
 				{
 					r = oldR;
 					g = oldG;

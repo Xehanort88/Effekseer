@@ -378,3 +378,5 @@ Transform_Recolour_Set,指定
 Transform_Recolour_Hue,色相（度）
 Transform_Recolour_Skipped,"エフェクトを塗り替えました。ただし次のパラメーターは変更していません。
 {0}"
+Transform_Recolour_Saturation,彩度（倍率）
+Transform_Recolour_Brightness,明度（倍率）

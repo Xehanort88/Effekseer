@@ -361,28 +361,6 @@ namespace Effekseer.GUI
 			return true;
 		}
 
-		/// <summary>
-		/// ダイアログで指定された量だけエフェクト全体を動かす。
-		/// </summary>
-		internal static void ApplyDisplace(float x, float y, float z)
-		{
-			if (x == 0.0f && y == 0.0f && z == 0.0f) return;
-
-			var result = Utils.EffectTransformer.Displace(Core.Root, x, y, z);
-			ReportTransform(result, "Transform_Displace_Skipped");
-		}
-
-		/// <summary>
-		/// ダイアログで指定された色相を適用する。
-		/// </summary>
-		internal static void ApplyRecolour(Utils.HueMode mode, float hueDegrees)
-		{
-			if (mode == Utils.HueMode.Rotate && hueDegrees == 0.0f) return;
-
-			var result = Utils.EffectRecolour.Apply(Core.Root, mode, hueDegrees);
-			ReportTransform(result, "Transform_Recolour_Skipped");
-		}
-
 		static bool Flip(Utils.TransformAxis axis)
 		{
 			var result = Utils.EffectTransformer.Flip(Core.Root, axis);
@@ -394,7 +372,7 @@ namespace Effekseer.GUI
 		/// 変換できなかったパラメーターがある場合のみ知らせる。
 		/// 黙って一部だけ変換されると、利用者は気付かないまま保存してしまう。
 		/// </summary>
-		static void ReportTransform(Utils.EffectTransformResult result, string messageKey)
+		internal static void ReportTransform(Utils.EffectTransformResult result, string messageKey)
 		{
 			var sections = new System.Collections.Generic.List<string>();
 

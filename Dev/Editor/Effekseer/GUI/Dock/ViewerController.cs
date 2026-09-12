@@ -192,6 +192,30 @@ namespace Effekseer.GUI.Dock
 				Manager.NativeManager.SetTooltip(MultiLanguageTextProvider.GetText("Transform_Recolour_Desc"));
 			}
 
+			Manager.NativeManager.SameLine(0.0f, spacing);
+
+			if (Manager.NativeManager.Button(MultiLanguageTextProvider.GetText("InternalScaleEffect")))
+			{
+				Commands.ScaleEffect();
+			}
+
+			if (Manager.NativeManager.IsItemHovered())
+			{
+				Manager.NativeManager.SetTooltip(MultiLanguageTextProvider.GetText("Transform_Scale_Desc"));
+			}
+
+			Manager.NativeManager.SameLine(0.0f, spacing);
+
+			if (Manager.NativeManager.Button(MultiLanguageTextProvider.GetText("InternalRotateEffect")))
+			{
+				Commands.RotateEffect();
+			}
+
+			if (Manager.NativeManager.IsItemHovered())
+			{
+				Manager.NativeManager.SetTooltip(MultiLanguageTextProvider.GetText("Transform_Rotate_Desc"));
+			}
+
 			void FlipButton(string label, Func<bool> command, float gap)
 			{
 				Manager.NativeManager.SameLine(0.0f, gap);

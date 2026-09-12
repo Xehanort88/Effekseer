@@ -50,6 +50,8 @@ namespace Effekseer.GUI
 			register(ReverseTimeline);
 			register(Displace);
 			register(Recolour);
+			register(ScaleEffect);
+			register(RotateEffect);
 		}
 
 		[Name(value = "InternalNew")]
@@ -350,6 +352,22 @@ namespace Effekseer.GUI
 		public static bool Displace()
 		{
 			new Dialog.DisplaceEffect().Show();
+			return true;
+		}
+
+		[Name(value = "InternalScaleEffect")]
+		[UniqueName(value = "Internal.ScaleEffect")]
+		public static bool ScaleEffect()
+		{
+			new Dialog.ScaleEffect().Show();
+			return true;
+		}
+
+		[Name(value = "InternalRotateEffect")]
+		[UniqueName(value = "Internal.RotateEffect")]
+		public static bool RotateEffect()
+		{
+			new Dialog.RotateEffect().Show();
 			return true;
 		}
 

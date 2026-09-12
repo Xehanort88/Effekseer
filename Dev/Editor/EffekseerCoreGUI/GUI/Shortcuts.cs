@@ -187,6 +187,8 @@ namespace Effekseer.GUI
 				AddShortcut(new Shortcut("Internal.ReverseTimeline", false, false, false, 0, null));
 				AddShortcut(new Shortcut("Internal.Displace", false, false, false, 0, null));
 				AddShortcut(new Shortcut("Internal.Recolour", false, false, false, 0, null));
+				AddShortcut(new Shortcut("Internal.ScaleEffect", false, false, false, 0, null));
+				AddShortcut(new Shortcut("Internal.RotateEffect", false, false, false, 0, null));
 			}
 		}
 

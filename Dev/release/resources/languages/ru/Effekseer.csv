@@ -380,3 +380,13 @@ Transform_Recolour_Target,Целевой цвет
 Transform_Recolour_HueReadout,"Оттенок, взятый из цвета: {0} градусов"
 Transform_Recolour_Before,До
 Transform_Recolour_After,После
+InternalScaleEffect,Масштабировать эффект...
+InternalRotateEffect,Повернуть эффект...
+Transform_Scale_Desc,"Меняет размер всего эффекта. Умножается каждая длина: позиции, скорости, размеры частиц и формы порождения."
+Transform_Scale_Factor,Множитель (x)
+Transform_Scale_Skipped,"Размер эффекта изменён, но у этих параметров нет длины для масштабирования, и они остались без изменений:
+{0}"
+Transform_Rotate_Desc,"Поворачивает весь эффект вокруг оси. Дочерние узлы следуют за родительскими, поэтому форма сохраняется."
+Transform_Rotate_Angle,Угол (градусы)
+Transform_Rotate_Skipped,"Эффект повёрнут, но эти параметры повернуть не удалось, и они остались без изменений:
+{0}"

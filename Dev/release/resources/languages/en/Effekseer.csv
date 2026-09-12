@@ -384,3 +384,13 @@ Transform_Recolour_Target,Target colour
 Transform_Recolour_HueReadout,Hue taken from the colour: {0} degrees
 Transform_Recolour_Before,Before
 Transform_Recolour_After,After
+InternalScaleEffect,Scale effect...
+InternalRotateEffect,Rotate effect...
+Transform_Scale_Desc,"Resize the whole effect. Every length is multiplied: positions, speeds, particle sizes and spawn shapes."
+Transform_Scale_Factor,Factor (x)
+Transform_Scale_Skipped,"The effect was resized, but these parameters have no length to scale and were left unchanged:
+{0}"
+Transform_Rotate_Desc,"Turn the whole effect about an axis. Child nodes follow their parents, so the shape is kept."
+Transform_Rotate_Angle,Angle (degrees)
+Transform_Rotate_Skipped,"The effect was rotated, but these parameters could not be turned and were left unchanged:
+{0}"

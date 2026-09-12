@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace Effekseer.GUI.Dialog
 {
@@ -134,6 +134,81 @@ namespace Effekseer.GUI.Dialog
 			if (offset[0] == 0.0f && offset[1] == 0.0f && offset[2] == 0.0f) return null;
 
 			return Utils.EffectTransformer.Displace(Core.Root, offset[0], offset[1], offset[2]);
+		}
+	}
+
+	/// <summary>
+	/// エフェクト全体の大きさの倍率を尋ねる。
+	/// </summary>
+	class ScaleEffect : PreviewDialog
+	{
+		readonly float[] factor = new float[] { 1.0f };
+
+		protected override string TitleKey { get { return "InternalScaleEffect"; } }
+		protected override string Id { get { return "ScaleEffectDialog"; } }
+		protected override string SkippedMessageKey { get { return "Transform_Scale_Skipped"; } }
+
+		protected override bool DrawContents()
+		{
+			Manager.NativeManager.Text(MultiLanguageTextProvider.GetText("Transform_Scale_Desc"));
+			Manager.NativeManager.Separator();
+
+			return Manager.NativeManager.DragFloat(
+				MultiLanguageTextProvider.GetText("Transform_Scale_Factor"), factor, 0.01f, 0.01f, 20.0f, "%.2f");
+		}
+
+		protected override Utils.EffectTransformResult Run()
+		{
+			if (factor[0] == 1.0f) return null;
+
+			return Utils.EffectTransformer.Scale(Core.Root, factor[0]);
+		}
+	}
+
+	/// <summary>
+	/// エフェクト全体を回す軸と角度を尋ねる。
+	/// </summary>
+	class RotateEffect : PreviewDialog
+	{
+		Utils.TransformAxis axis = Utils.TransformAxis.Y;
+		readonly float[] degrees = new float[] { 0.0f };
+
+		protected override string TitleKey { get { return "InternalRotateEffect"; } }
+		protected override string Id { get { return "RotateEffectDialog"; } }
+		protected override string SkippedMessageKey { get { return "Transform_Rotate_Skipped"; } }
+
+		protected override bool DrawContents()
+		{
+			Manager.NativeManager.Text(MultiLanguageTextProvider.GetText("Transform_Rotate_Desc"));
+			Manager.NativeManager.Separator();
+
+			bool changed = false;
+			changed |= AxisButton(Utils.TransformAxis.X, "X###RotateX");
+			Manager.NativeManager.SameLine();
+			changed |= AxisButton(Utils.TransformAxis.Y, "Y###RotateY");
+			Manager.NativeManager.SameLine();
+			changed |= AxisButton(Utils.TransformAxis.Z, "Z###RotateZ");
+
+			changed |= Manager.NativeManager.DragFloat(
+				MultiLanguageTextProvider.GetText("Transform_Rotate_Angle"), degrees, 1.0f, -180.0f, 180.0f, "%.0f");
+
+			return changed;
+		}
+
+		bool AxisButton(Utils.TransformAxis candidate, string label)
+		{
+			if (!Manager.NativeManager.RadioButton(label, axis == candidate)) return false;
+			if (axis == candidate) return false;
+
+			axis = candidate;
+			return true;
+		}
+
+		protected override Utils.EffectTransformResult Run()
+		{
+			if (degrees[0] == 0.0f) return null;
+
+			return Utils.EffectTransformer.Rotate(Core.Root, axis, degrees[0]);
 		}
 	}
 

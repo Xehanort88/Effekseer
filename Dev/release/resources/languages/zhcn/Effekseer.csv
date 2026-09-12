@@ -379,3 +379,13 @@ Transform_Recolour_Target,目标颜色
 Transform_Recolour_HueReadout,从颜色取得的色相：{0} 度
 Transform_Recolour_Before,之前
 Transform_Recolour_After,之后
+InternalScaleEffect,缩放特效...
+InternalRotateEffect,旋转特效...
+Transform_Scale_Desc,更改整个特效的大小。所有长度都会乘以倍率：位置、速度、粒子大小和发生形状。
+Transform_Scale_Factor,倍率
+Transform_Scale_Skipped,"特效大小已更改，但以下参数没有可缩放的长度，未作更改：
+{0}"
+Transform_Rotate_Desc,让整个特效绕某个轴旋转。子节点跟随父节点，因此形状保持不变。
+Transform_Rotate_Angle,角度（度）
+Transform_Rotate_Skipped,"特效已旋转，但以下参数无法旋转，未作更改：
+{0}"

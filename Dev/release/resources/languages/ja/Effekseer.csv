@@ -384,3 +384,13 @@ Transform_Recolour_Target,目標の色
 Transform_Recolour_HueReadout,色から取った色相: {0} 度
 Transform_Recolour_Before,変換前
 Transform_Recolour_After,変換後
+InternalScaleEffect,エフェクトを拡大縮小...
+InternalRotateEffect,エフェクトを回転...
+Transform_Scale_Desc,エフェクト全体の大きさを変えます。位置、速度、粒子の大きさ、発生形状など長さを持つ値すべてに倍率が掛かります。
+Transform_Scale_Factor,倍率
+Transform_Scale_Skipped,"エフェクトの大きさを変えました。ただし次のパラメーターは長さを持たないため、変更していません。
+{0}"
+Transform_Rotate_Desc,エフェクト全体を軸まわりに回します。子ノードは親に従うため、形は変わりません。
+Transform_Rotate_Angle,角度（度）
+Transform_Rotate_Skipped,"エフェクトを回転しました。ただし次のパラメーターは回せないため、変更していません。
+{0}"

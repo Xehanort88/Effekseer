@@ -66,6 +66,10 @@ namespace Effekseer.GUI.Menu
 				CreateMenuItemFromCommands(Commands.FlipY),
 				CreateMenuItemFromCommands(Commands.FlipZ),
 				CreateMenuItemFromCommands(Commands.ReverseTimeline),
+				CreateMenuItemFromCommands(Commands.Displace),
+				CreateMenuItemFromCommands(Commands.Recolour),
+				CreateMenuItemFromCommands(Commands.ScaleEffect),
+				CreateMenuItemFromCommands(Commands.RotateEffect),
 
 				new MenuSeparator(),
 

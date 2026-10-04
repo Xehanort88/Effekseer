@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Effekseer.Data;
@@ -615,6 +615,694 @@ namespace Effekseer.Utils
 		static bool UsesEquation(params Vector3DWithRandom[] values)
 		{
 			return values.Any(v => v.IsDynamicEquationEnabled.Value);
+		}
+
+		#endregion
+
+		#region displace
+
+		/// <summary>
+		/// エフェクト全体を平行移動する。
+		/// 子ノードの位置は親からの相対値なので、最上位のノードだけを動かせば
+		/// 形を保ったまま全体が移動する。
+		/// ただし親の移動を受け継がない設定のノードは、深さに関わらず個別に動かす。
+		/// </summary>
+		public static EffectTransformResult Displace(NodeRoot root, float x, float y, float z)
+		{
+			var result = new EffectTransformResult();
+			if (root == null) return result;
+
+			Command.CommandManager.StartCollection();
+			try
+			{
+				foreach (var node in EnumerateNodes(root))
+				{
+					if (!MovesWithParent(node))
+					{
+						DisplaceNode(node, x, y, z, result);
+					}
+
+					result.NodeCount++;
+				}
+			}
+			finally
+			{
+				Command.CommandManager.EndCollection();
+			}
+
+			return result;
+		}
+
+		/// <summary>
+		/// 親の移動に追従するか。最上位のノードは追従する親を持たない。
+		/// </summary>
+		static bool MovesWithParent(Node node)
+		{
+			if (node.Parent is NodeRoot) return false;
+
+			switch (node.CommonValues.LocationEffectType.Value)
+			{
+				case TranslationParentEffectType.NotBind:
+				case TranslationParentEffectType.NotBind_Root:
+					return false;
+
+				default:
+					return true;
+			}
+		}
+
+		static void DisplaceNode(Node node, float x, float y, float z, EffectTransformResult result)
+		{
+			var location = node.LocationValues;
+
+			switch (location.Type.Value)
+			{
+				case LocationValues.ParamaterType.Fixed:
+					Shift(location.Fixed.Location, x, y, z);
+					break;
+
+				case LocationValues.ParamaterType.PVA:
+					// 速度と加速度は動かさない。動き方は変えずに出発点だけを移す。
+					Shift(location.PVA.Location, x, y, z);
+					break;
+
+				case LocationValues.ParamaterType.Easing:
+					Shift(location.Easing.Start, x, y, z);
+					Shift(location.Easing.End, x, y, z);
+					break;
+
+				case LocationValues.ParamaterType.LocationFCurve:
+				{
+					var curve = location.LocationFCurve.FCurve;
+					ShiftCurveValues(curve.X, x);
+					ShiftCurveValues(curve.Y, y);
+					ShiftCurveValues(curve.Z, z);
+					break;
+				}
+
+				case LocationValues.ParamaterType.NurbsCurve:
+					// 経路は外部ファイルにあり、ずらす余地がない。
+					result.Skip("Position", "Position_ParameterType_NurbsCurve_Name");
+					break;
+
+				case LocationValues.ParamaterType.ViewOffset:
+					result.Skip("Position", "Position_ParameterType_ViewOffset_Name");
+					break;
+			}
+		}
+
+		static void Shift(Vector3D value, float x, float y, float z)
+		{
+			TrySetValue(value.X, value.X.GetValue() + x);
+			TrySetValue(value.Y, value.Y.GetValue() + y);
+			TrySetValue(value.Z, value.Z.GetValue() + z);
+		}
+
+		static void Shift(Vector3DWithRandom value, float x, float y, float z)
+		{
+			// 中心を動かすと振れ幅は保たれる。
+			TrySetCenter(value.X, value.X.GetCenter() + x);
+			TrySetCenter(value.Y, value.Y.GetCenter() + y);
+			TrySetCenter(value.Z, value.Z.GetCenter() + z);
+		}
+
+		static bool TrySetValue(Float value, float target)
+		{
+			if (target < value.RangeMin || target > value.RangeMax) return false;
+
+			value.SetValue(target);
+			return true;
+		}
+
+		/// <summary>
+		/// F カーブ全体を縦にずらす。制御点は絶対座標なので一緒に動かす。
+		/// </summary>
+		static void ShiftCurveValues(FCurve<float> curve, float delta)
+		{
+			if (delta == 0.0f) return;
+
+			var keys = ReadKeys(curve);
+			if (keys.Length == 0) return;
+
+			var replaced = keys
+				.Select(source =>
+				{
+					var key = new FCurveKey<float>(source.Frame, source.ValueAsFloat + delta);
+					key.SetLeftDirectly(source.LeftX, source.LeftY + delta);
+					key.SetRightDirectly(source.RightX, source.RightY + delta);
+					key.SetInterpolationType(source.InterpolationType);
+					return key;
+				})
+				.ToArray();
+
+			curve.SetKeys(replaced);
+		}
+
+		#endregion
+
+		#region rotate
+
+		/// <summary>
+		/// エフェクト全体を軸まわりに回す。
+		///
+		/// 移動と同じく最上位のノードだけを扱う。子の位置と向きは親に従うので、
+		/// 最上位の位置を回し、最上位の向きに角度を足せば全体が回る。
+		/// </summary>
+		public static EffectTransformResult Rotate(NodeRoot root, TransformAxis axis, float degrees)
+		{
+			var result = new EffectTransformResult();
+			if (root == null || degrees == 0.0f) return result;
+
+			double radians = degrees * Math.PI / 180.0;
+
+			// 直角では cos が 6e-17 のような値になり、本来ゼロの成分に残りが出る。
+			// 角度の側で丸めておけば、90 度単位の回転がきれいな数のまま残る。
+			float cos = Exact(Math.Cos(radians));
+			float sin = Exact(Math.Sin(radians));
+
+			Command.CommandManager.StartCollection();
+			try
+			{
+				foreach (var node in EnumerateNodes(root))
+				{
+					if (!MovesWithParent(node))
+					{
+						RotateLocation(node, axis, cos, sin, result);
+					}
+
+					if (!TurnsWithParent(node))
+					{
+						RotateOrientation(node, axis, degrees, result);
+					}
+
+					result.NodeCount++;
+				}
+			}
+			finally
+			{
+				Command.CommandManager.EndCollection();
+			}
+
+			return result;
+		}
+
+		/// <summary>
+		/// 0 や ±1 のすぐ近くにある三角関数の値を、その値そのものに寄せる。
+		/// 判定の幅は、意味のある回転では決して起きないほど小さく取る。
+		/// </summary>
+		static float Exact(double value)
+		{
+			const double epsilon = 1e-12;
+
+			if (Math.Abs(value) < epsilon) return 0.0f;
+			if (Math.Abs(value - 1.0) < epsilon) return 1.0f;
+			if (Math.Abs(value + 1.0) < epsilon) return -1.0f;
+
+			return (float)value;
+		}
+
+		/// <summary>
+		/// 親の回転に追従するか。追従しないノードは自分で回さなければ取り残される。
+		/// </summary>
+		static bool TurnsWithParent(Node node)
+		{
+			if (node.Parent is NodeRoot) return false;
+
+			switch (node.CommonValues.RotationEffectType.Value)
+			{
+				case ParentEffectType.NotBind:
+				case ParentEffectType.NotBind_Root:
+					return false;
+
+				default:
+					return true;
+			}
+		}
+
+		/// <summary>
+		/// 軸に垂直な平面の 2 成分だけが混ざる。軸方向の成分は変わらない。
+		/// </summary>
+		static void PlaneOf(TransformAxis axis, out int first, out int second)
+		{
+			switch (axis)
+			{
+				case TransformAxis.X: first = 1; second = 2; break;   // Y と Z
+				case TransformAxis.Y: first = 2; second = 0; break;   // Z と X
+				default: first = 0; second = 1; break;                // X と Y
+			}
+		}
+
+		static void RotateLocation(Node node, TransformAxis axis, float cos, float sin, EffectTransformResult result)
+		{
+			var location = node.LocationValues;
+
+			switch (location.Type.Value)
+			{
+				case LocationValues.ParamaterType.Fixed:
+					RotateVector(location.Fixed.Location, axis, cos, sin);
+					break;
+
+				case LocationValues.ParamaterType.PVA:
+					RotateVector(location.PVA.Location, axis, cos, sin, result);
+					RotateVector(location.PVA.Velocity, axis, cos, sin, result);
+					RotateVector(location.PVA.Acceleration, axis, cos, sin, result);
+					break;
+
+				case LocationValues.ParamaterType.Easing:
+					RotateVector(location.Easing.Start, axis, cos, sin, result);
+					RotateVector(location.Easing.End, axis, cos, sin, result);
+					break;
+
+				case LocationValues.ParamaterType.LocationFCurve:
+					RotateCurvePair(location.LocationFCurve.FCurve, axis, cos, sin);
+					result.Approximate("Position", "Position_ParamaterType_LocationFCurve_Name");
+					break;
+
+				case LocationValues.ParamaterType.NurbsCurve:
+					result.Skip("Position", "Position_ParameterType_NurbsCurve_Name");
+					break;
+
+				case LocationValues.ParamaterType.ViewOffset:
+					break;
+			}
+		}
+
+		static void RotateVector(Vector3D value, TransformAxis axis, float cos, float sin)
+		{
+			int a, b;
+			PlaneOf(axis, out a, out b);
+
+			var components = new[] { value.X, value.Y, value.Z };
+			float u = components[a].GetValue();
+			float v = components[b].GetValue();
+
+			// 直角付近では片方の項がほぼ打ち消され、1e-16 のような残りが出る。
+			TrySetValue(components[a], (float)SnapToZero(u * cos - v * sin, u * cos, v * sin));
+			TrySetValue(components[b], (float)SnapToZero(u * sin + v * cos, u * sin, v * cos));
+		}
+
+		/// <summary>
+		/// 乱数つきの位置は、中心だけを回して振れ幅は残す。
+		/// 回すと範囲が軸に沿わない形になり、そのままでは表せないため。
+		/// </summary>
+		static void RotateVector(Vector3DWithRandom value, TransformAxis axis, float cos, float sin,
+			EffectTransformResult result)
+		{
+			int a, b;
+			PlaneOf(axis, out a, out b);
+
+			var components = new[] { value.X, value.Y, value.Z };
+			float u = components[a].GetCenter();
+			float v = components[b].GetCenter();
+
+			TrySetCenter(components[a], (float)SnapToZero(u * cos - v * sin, u * cos, v * sin));
+			TrySetCenter(components[b], (float)SnapToZero(u * sin + v * cos, u * sin, v * cos));
+
+			if (components[a].GetAmplitude() != 0.0f || components[b].GetAmplitude() != 0.0f)
+			{
+				result.Approximate("Position", "Position_ParamaterType_PVA_Name");
+			}
+		}
+
+		/// <summary>
+		/// 2 本のカーブが混ざるので、どちらかがキーを持つフレームをすべて集めて作り直す。
+		/// キーの間は引き直しになるため、曲線の形は少し変わる。
+		/// </summary>
+		static void RotateCurvePair(FCurveVector3D curve, TransformAxis axis, float cos, float sin)
+		{
+			int a, b;
+			PlaneOf(axis, out a, out b);
+
+			var curves = new[] { curve.X, curve.Y, curve.Z };
+			var first = curves[a];
+			var second = curves[b];
+
+			var frames = first.Keys.Concat(second.Keys)
+				.Select(key => key.Frame)
+				.Distinct()
+				.OrderBy(frame => frame)
+				.ToArray();
+
+			if (frames.Length == 0) return;
+
+			var rotatedFirst = new FCurveKey<float>[frames.Length];
+			var rotatedSecond = new FCurveKey<float>[frames.Length];
+
+			for (int i = 0; i < frames.Length; i++)
+			{
+				float u = first.GetValue(frames[i]);
+				float v = second.GetValue(frames[i]);
+
+				rotatedFirst[i] = LinearKey(frames[i], (float)SnapToZero(u * cos - v * sin, u * cos, v * sin));
+				rotatedSecond[i] = LinearKey(frames[i], (float)SnapToZero(u * sin + v * cos, u * sin, v * cos));
+			}
+
+			first.SetKeys(rotatedFirst);
+			second.SetKeys(rotatedSecond);
+		}
+
+		static FCurveKey<float> LinearKey(int frame, float value)
+		{
+			var key = new FCurveKey<float>(frame, value);
+			key.SetInterpolationType(FCurveInterpolation.Linear);
+			return key;
+		}
+
+		/// <summary>
+		/// ノード自身の向きに角度を足す。
+		/// オイラー角は足し算で合成できないため、他の軸にも回転があるときは近似になる。
+		/// </summary>
+		static void RotateOrientation(Node node, TransformAxis axis, float degrees, EffectTransformResult result)
+		{
+			var rotation = node.RotationValues;
+
+			switch (rotation.Type.Value)
+			{
+				case RotationValues.ParamaterType.Fixed:
+					AddAngle(rotation.Fixed.Rotation, axis, degrees, result);
+					break;
+
+				case RotationValues.ParamaterType.PVA:
+					AddAngle(rotation.PVA.Rotation, axis, degrees, result);
+					break;
+
+				case RotationValues.ParamaterType.Easing:
+					AddAngle(rotation.Easing.Start, axis, degrees, result);
+					AddAngle(rotation.Easing.End, axis, degrees, result);
+					break;
+
+				default:
+					// 軸角や F カーブの回転に角度を足すと、回る向きそのものが変わる。
+					result.Skip("Rotation", "Rotation_ParamaterType_AxisPVA_Name");
+					break;
+			}
+		}
+
+		static void AddAngle(Vector3D value, TransformAxis axis, float degrees, EffectTransformResult result)
+		{
+			var components = new[] { value.X, value.Y, value.Z };
+
+			int index = (int)axis;
+			TrySetValue(components[index], components[index].GetValue() + degrees);
+
+			if (OtherAnglesPresent(components, index))
+			{
+				result.Approximate("Rotation", "Rotation_ParamaterType_Fixed_Name");
+			}
+		}
+
+		static void AddAngle(Vector3DWithRandom value, TransformAxis axis, float degrees, EffectTransformResult result)
+		{
+			var components = new[] { value.X, value.Y, value.Z };
+
+			int index = (int)axis;
+			TrySetCenter(components[index], components[index].GetCenter() + degrees);
+
+			for (int i = 0; i < 3; i++)
+			{
+				if (i != index && components[i].GetCenter() != 0.0f)
+				{
+					result.Approximate("Rotation", "Rotation_ParamaterType_Fixed_Name");
+					return;
+				}
+			}
+		}
+
+		static bool OtherAnglesPresent(Float[] components, int index)
+		{
+			for (int i = 0; i < components.Length; i++)
+			{
+				if (i != index && components[i].GetValue() != 0.0f) return true;
+			}
+
+			return false;
+		}
+
+		#endregion
+
+		#region scale
+
+		/// <summary>
+		/// エフェクト全体の大きさを変える。
+		///
+		/// 長さを持つ値をすべて同じ倍率で掛ける。位置は親からの相対値なので、
+		/// 全ノードを掛ければ階層のまま相似に拡大される。
+		/// 角度と時間は長さではないので触らない。
+		/// </summary>
+		public static EffectTransformResult Scale(NodeRoot root, float factor)
+		{
+			var result = new EffectTransformResult();
+			if (root == null || factor <= 0.0f) return result;
+
+			Command.CommandManager.StartCollection();
+			try
+			{
+				foreach (var node in EnumerateNodes(root))
+				{
+					ScaleLocation(node, factor, result);
+					ScaleForceFields(node, factor, result);
+					ScaleGenerationLocation(node, factor, result);
+					ScaleSize(node, factor);
+					ScaleValue(node.DepthValues.DepthOffset, factor);
+					result.NodeCount++;
+				}
+			}
+			finally
+			{
+				Command.CommandManager.EndCollection();
+			}
+
+			return result;
+		}
+
+		static void ScaleLocation(Node node, float factor, EffectTransformResult result)
+		{
+			var location = node.LocationValues;
+
+			switch (location.Type.Value)
+			{
+				case LocationValues.ParamaterType.Fixed:
+					ScaleVector(location.Fixed.Location, factor);
+					break;
+
+				case LocationValues.ParamaterType.PVA:
+					// 速度は長さ毎秒、加速度は長さ毎秒毎秒。どちらも長さの倍率が掛かる。
+					ScaleVector(location.PVA.Location, factor);
+					ScaleVector(location.PVA.Velocity, factor);
+					ScaleVector(location.PVA.Acceleration, factor);
+					break;
+
+				case LocationValues.ParamaterType.Easing:
+					ScaleVector(location.Easing.Start, factor);
+					ScaleVector(location.Easing.End, factor);
+					break;
+
+				case LocationValues.ParamaterType.LocationFCurve:
+				{
+					var curve = location.LocationFCurve.FCurve;
+					ScaleCurve(curve.X, factor);
+					ScaleCurve(curve.Y, factor);
+					ScaleCurve(curve.Z, factor);
+					break;
+				}
+
+				case LocationValues.ParamaterType.NurbsCurve:
+					// 経路そのものは動かせないが、経路にかかる倍率は持っている。
+					ScaleValue(location.NurbsCurve.Scale, factor);
+					ScaleValue(location.NurbsCurve.MoveSpeed, factor);
+					break;
+
+				case LocationValues.ParamaterType.ViewOffset:
+					ScaleValue(location.ViewOffset.Distance, factor);
+					break;
+			}
+		}
+
+		static void ScaleForceFields(Node node, float factor, EffectTransformResult result)
+		{
+			var fields = new[]
+			{
+				node.LocationAbsValues.LocalForceField1,
+				node.LocationAbsValues.LocalForceField2,
+				node.LocationAbsValues.LocalForceField3,
+				node.LocationAbsValues.LocalForceField4,
+			};
+
+			foreach (var field in fields)
+			{
+				if (field.Type.Value == LocalForceFieldType.None) continue;
+
+				ScaleVector(field.Position, factor);
+
+				// 減衰の距離も長さ。
+				ScaleValue(field.Falloff.MaxDistance, factor);
+				ScaleValue(field.Falloff.MinDistance, factor);
+
+				switch (field.Type.Value)
+				{
+					case LocalForceFieldType.Gravity:
+						ScaleVector(field.Gravity.Gravity, factor);
+						break;
+
+					case LocalForceFieldType.Force:
+					case LocalForceFieldType.Wind:
+						// 加速度なので長さの倍率が掛かる。
+						ScaleValue(field.Power, factor);
+						break;
+
+					case LocalForceFieldType.AttractiveForce:
+						ScaleValue(field.Power, factor);
+						ScaleValue(field.AttractiveForce.MinRange, factor);
+						ScaleValue(field.AttractiveForce.MaxRange, factor);
+						break;
+
+					case LocalForceFieldType.Turbulence:
+						ScaleValue(field.Power, factor);
+						ScaleValue(field.Turbulence.FieldScale, factor);
+						break;
+
+					case LocalForceFieldType.Vortex:
+						// 回転の速さが長さに比例するかは種類によって変わる。
+						result.Skip("AttractionForces", "LFF_Type_Vortex_Name");
+						break;
+
+					case LocalForceFieldType.Drag:
+						// 抵抗は無次元なので倍率は掛からない。
+						break;
+				}
+			}
+		}
+
+		static void ScaleGenerationLocation(Node node, float factor, EffectTransformResult result)
+		{
+			var generation = node.GenerationLocationValues;
+
+			switch (generation.Type.Value)
+			{
+				case GenerationLocationValues.ParameterType.Point:
+					ScaleVector(generation.Point.Location, factor);
+					break;
+
+				case GenerationLocationValues.ParameterType.Line:
+					ScaleVector(generation.Line.PositionStart, factor);
+					ScaleVector(generation.Line.PositionEnd, factor);
+					ScaleValue(generation.Line.PositionNoize, factor);
+					break;
+
+				case GenerationLocationValues.ParameterType.Sphere:
+					ScaleValue(generation.Sphere.Radius, factor);
+					break;
+
+				case GenerationLocationValues.ParameterType.Circle:
+					ScaleValue(generation.Circle.Radius, factor);
+					break;
+
+				case GenerationLocationValues.ParameterType.Model:
+					// 形は外部のメッシュが決めている。
+					result.Skip("SpawningMethod", "SpawnMethod_ParameterType_Model_Name");
+					break;
+			}
+		}
+
+		/// <summary>
+		/// 粒子そのものの大きさ。位置だけ広げると粒が取り残されて見える。
+		/// </summary>
+		static void ScaleSize(Node node, float factor)
+		{
+			var scale = node.ScalingValues;
+
+			switch (scale.Type.Value)
+			{
+				case ScaleValues.ParamaterType.Fixed:
+					ScaleVector(scale.Fixed.Scale, factor);
+					break;
+
+				case ScaleValues.ParamaterType.PVA:
+					ScaleVector(scale.PVA.Scale, factor);
+					ScaleVector(scale.PVA.Velocity, factor);
+					ScaleVector(scale.PVA.Acceleration, factor);
+					break;
+
+				case ScaleValues.ParamaterType.Easing:
+					ScaleVector(scale.Easing.Start, factor);
+					ScaleVector(scale.Easing.End, factor);
+					break;
+
+				case ScaleValues.ParamaterType.FCurve:
+					ScaleCurve(scale.FCurve.FCurve.X, factor);
+					ScaleCurve(scale.FCurve.FCurve.Y, factor);
+					ScaleCurve(scale.FCurve.FCurve.Z, factor);
+					break;
+
+				case ScaleValues.ParamaterType.SinglePVA:
+					ScaleValue(scale.SinglePVA.Scale, factor);
+					ScaleValue(scale.SinglePVA.Velocity, factor);
+					ScaleValue(scale.SinglePVA.Acceleration, factor);
+					break;
+
+				case ScaleValues.ParamaterType.SingleEasing:
+					ScaleValue(scale.SingleEasing.Start, factor);
+					ScaleValue(scale.SingleEasing.End, factor);
+					break;
+
+				case ScaleValues.ParamaterType.SingleFCurve:
+					ScaleCurve(scale.SingleFCurve.S, factor);
+					break;
+			}
+		}
+
+		static void ScaleValue(Float value, float factor)
+		{
+			TrySetValue(value, value.GetValue() * factor);
+		}
+
+		static void ScaleValue(FloatWithRandom value, float factor)
+		{
+			// 倍率は正なので大小関係は入れ替わらない。
+			float low = value.GetMin() * factor;
+			float high = value.GetMax() * factor;
+
+			if (low < value.ValueMin || high > value.ValueMax) return;
+
+			value.SetMin(low);
+			value.SetMax(high);
+		}
+
+		static void ScaleVector(Vector3D value, float factor)
+		{
+			ScaleValue(value.X, factor);
+			ScaleValue(value.Y, factor);
+			ScaleValue(value.Z, factor);
+		}
+
+		static void ScaleVector(Vector3DWithRandom value, float factor)
+		{
+			ScaleValue(value.X, factor);
+			ScaleValue(value.Y, factor);
+			ScaleValue(value.Z, factor);
+		}
+
+		static void ScaleCurve(FCurve<float> curve, float factor)
+		{
+			var keys = ReadKeys(curve);
+			if (keys.Length > 0)
+			{
+				var replaced = keys
+					.Select(source =>
+					{
+						var key = new FCurveKey<float>(source.Frame, source.ValueAsFloat * factor);
+						key.SetLeftDirectly(source.LeftX, source.LeftY * factor);
+						key.SetRightDirectly(source.RightX, source.RightY * factor);
+						key.SetInterpolationType(source.InterpolationType);
+						return key;
+					})
+					.ToArray();
+
+				curve.SetKeys(replaced);
+			}
+
+			curve.OffsetMin.SetValue(curve.OffsetMin.GetValue() * factor);
+			curve.OffsetMax.SetValue(curve.OffsetMax.GetValue() * factor);
 		}
 
 		#endregion

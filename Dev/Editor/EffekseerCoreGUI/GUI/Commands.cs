@@ -48,6 +48,10 @@ namespace Effekseer.GUI
 			register(FlipY);
 			register(FlipZ);
 			register(ReverseTimeline);
+			register(Displace);
+			register(Recolour);
+			register(ScaleEffect);
+			register(RotateEffect);
 		}
 
 		[Name(value = "InternalNew")]
@@ -343,6 +347,38 @@ namespace Effekseer.GUI
 			return true;
 		}
 
+		[Name(value = "InternalDisplace")]
+		[UniqueName(value = "Internal.Displace")]
+		public static bool Displace()
+		{
+			new Dialog.DisplaceEffect().Show();
+			return true;
+		}
+
+		[Name(value = "InternalScaleEffect")]
+		[UniqueName(value = "Internal.ScaleEffect")]
+		public static bool ScaleEffect()
+		{
+			new Dialog.ScaleEffect().Show();
+			return true;
+		}
+
+		[Name(value = "InternalRotateEffect")]
+		[UniqueName(value = "Internal.RotateEffect")]
+		public static bool RotateEffect()
+		{
+			new Dialog.RotateEffect().Show();
+			return true;
+		}
+
+		[Name(value = "InternalRecolour")]
+		[UniqueName(value = "Internal.Recolour")]
+		public static bool Recolour()
+		{
+			new Dialog.RecolourEffect().Show();
+			return true;
+		}
+
 		static bool Flip(Utils.TransformAxis axis)
 		{
 			var result = Utils.EffectTransformer.Flip(Core.Root, axis);
@@ -354,7 +390,7 @@ namespace Effekseer.GUI
 		/// 変換できなかったパラメーターがある場合のみ知らせる。
 		/// 黙って一部だけ変換されると、利用者は気付かないまま保存してしまう。
 		/// </summary>
-		static void ReportTransform(Utils.EffectTransformResult result, string messageKey)
+		internal static void ReportTransform(Utils.EffectTransformResult result, string messageKey)
 		{
 			var sections = new System.Collections.Generic.List<string>();
 

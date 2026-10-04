@@ -369,3 +369,30 @@ Transform_ReverseTimeline_Desc,Play curves and easing backwards on every node. E
 Transform_Flip_Label,Flip effect:
 Transform_Approximated,"These parameters were reversed approximately. Randomised values cannot be matched up particle by particle, so the average motion reverses but the spread does not:
 {0}"
+InternalDisplace,Displace effect...
+InternalRecolour,Recolour effect...
+Transform_Displace_Desc,"Move the whole effect. Child nodes follow their parents, so the shape is kept."
+Transform_Displace_Skipped,"The effect was moved, but these parameters have no position to offset and were left unchanged:
+{0}"
+Transform_Recolour_Desc,"Change the hue of every colour in the render settings. Saturation and brightness are kept. Pure white, pure black and greys have no hue and are left alone."
+Transform_Recolour_Rotate,Rotate
+Transform_Recolour_Set,Set
+Transform_Recolour_Hue,Hue (degrees)
+Transform_Recolour_Skipped,"The effect was recoloured, but these parameters were left unchanged:
+{0}"
+Transform_Recolour_Saturation,Saturation (x)
+Transform_Recolour_Brightness,Brightness (x)
+Transform_Recolour_Target,Target colour
+Transform_Recolour_HueReadout,Hue taken from the colour: {0} degrees
+Transform_Recolour_Before,Before
+Transform_Recolour_After,After
+InternalScaleEffect,Scale effect...
+InternalRotateEffect,Rotate effect...
+Transform_Scale_Desc,"Resize the whole effect. Every length is multiplied: positions, speeds, particle sizes and spawn shapes."
+Transform_Scale_Factor,Factor (x)
+Transform_Scale_Skipped,"The effect was resized, but these parameters have no length to scale and were left unchanged:
+{0}"
+Transform_Rotate_Desc,"Turn the whole effect about an axis. Child nodes follow their parents, so the shape is kept."
+Transform_Rotate_Angle,Angle (degrees)
+Transform_Rotate_Skipped,"The effect was rotated, but these parameters could not be turned and were left unchanged:
+{0}"

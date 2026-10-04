@@ -384,3 +384,30 @@ Transform_ReverseTimeline_Desc,Reproduce las curvas y las interpolaciones al rev
 Transform_Flip_Label,Voltear efecto:
 Transform_Approximated,"Estos parámetros se invirtieron de forma aproximada. Los valores aleatorios no se pueden emparejar partícula por partícula, de modo que el movimiento medio se invierte pero la dispersión no:
 {0}"
+InternalDisplace,Desplazar efecto...
+InternalRecolour,Recolorear efecto...
+Transform_Displace_Desc,"Mueve todo el efecto. Los nodos hijos siguen a sus padres, de modo que se conserva la forma."
+Transform_Displace_Skipped,"El efecto se movió, pero estos parámetros no tienen una posición que desplazar y no se modificaron:
+{0}"
+Transform_Recolour_Desc,"Cambia el tono de todos los colores de las opciones de Render. La saturación y el brillo se conservan. El blanco puro, el negro puro y los grises no tienen tono y no se modifican."
+Transform_Recolour_Rotate,Girar
+Transform_Recolour_Set,Fijar
+Transform_Recolour_Hue,Tono (grados)
+Transform_Recolour_Skipped,"El efecto se recoloreó, pero estos parámetros no se modificaron:
+{0}"
+Transform_Recolour_Saturation,Saturación (x)
+Transform_Recolour_Brightness,Brillo (x)
+Transform_Recolour_Target,Color objetivo
+Transform_Recolour_HueReadout,Tono tomado del color: {0} grados
+Transform_Recolour_Before,Antes
+Transform_Recolour_After,Después
+InternalScaleEffect,Escalar efecto...
+InternalRotateEffect,Rotar efecto...
+Transform_Scale_Desc,"Cambia el tamaño de todo el efecto. Se multiplica cada longitud: posiciones, velocidades, tamaños de partícula y formas de generación."
+Transform_Scale_Factor,Factor (x)
+Transform_Scale_Skipped,"El tamaño del efecto cambió, pero estos parámetros no tienen longitud que escalar y no se modificaron:
+{0}"
+Transform_Rotate_Desc,"Gira todo el efecto alrededor de un eje. Los nodos hijos siguen a sus padres, de modo que se conserva la forma."
+Transform_Rotate_Angle,Ángulo (grados)
+Transform_Rotate_Skipped,"El efecto se giró, pero estos parámetros no se pudieron girar y no se modificaron:
+{0}"
